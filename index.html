@@ -270,6 +270,68 @@ main{max-width:1100px;margin:0 auto;padding:26px 20px}
 .lbp-tier-f{background:linear-gradient(135deg,#111,#1a1212);color:#443333}
 .lbp-names{padding:8px 12px;flex:1;font-family:'Inter',sans-serif;font-size:.72rem;color:var(--text);line-height:1.6}
 .lbp-empty{color:var(--dim);font-style:italic;font-size:.65rem}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  header { padding: 24px 16px 18px; }
+  main { padding: 16px 12px; }
+  .main-title { font-size: clamp(2rem, 10vw, 3.5rem) !important; }
+  .author-bar { padding: 8px 12px; }
+  .author-bar input { max-width: 100%; }
+  .add-panel { padding: 12px; }
+  .chips-grid { max-height: 160px; }
+  .casino-chip { padding: 4px 8px 4px 5px; }
+  .casino-chip .chip-name { font-size: .68rem; }
+  .custom-add-row { flex-direction: column; }
+  .fg input[type=text] { width: 100%; }
+  .tier-label { width: 52px; min-width: 52px; font-size: 1.6rem; }
+  .tier-items { gap: 5px; padding: 6px 8px; min-height: 70px; }
+  .casino-card { width: 70px; }
+  .c-logo { width: 30px; height: 30px; }
+  .tier-actions { justify-content: center; }
+  .btn { padding: 10px 14px; font-size: .6rem; }
+  /* Rating popup full screen on mobile */
+  .rating-popup { 
+    position: fixed !important; 
+    left: 10px !important; 
+    right: 10px !important;
+    bottom: 10px !important;
+    top: auto !important;
+    width: auto !important;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 999;
+  }
+  /* Rate button on card */
+  .rate-btn {
+    display: flex !important;
+  }
+}
+/* Rate button — hidden on desktop, shown on mobile tap */
+.rate-btn {
+  position: absolute;
+  bottom: -6px; left: 50%; transform: translateX(-50%);
+  background: var(--fire2); color: #fff;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: .55rem; letter-spacing: 1px;
+  padding: 1px 6px; border-radius: 2px;
+  border: none; cursor: pointer;
+  display: none;
+  white-space: nowrap;
+  z-index: 5;
+}
+
+.rating-overlay{position:fixed;inset:0;z-index:998;display:none}
+.rating-overlay.open{display:block}
+
+@media (max-width: 768px) {
+  .custom-add-row { flex-direction: column; gap: 10px; }
+  .fg { width: 100%; }
+  .fg input[type=text] { width: 100% !important; }
+  .upload-wrap { width: 100%; }
+  .upload-wrap .btn { width: 100%; justify-content: center; }
+  .btn-fire[onclick*="addCustom"] { width: 100%; }
+}
 </style>
 </head>
 <body>
@@ -413,6 +475,7 @@ main{max-width:1100px;margin:0 auto;padding:26px 20px}
 
 
 <!-- RATING POPUP -->
+<div class="rating-overlay" id="rating-overlay" onclick="hideRatingPopup()"></div>
 <div class="rating-popup" id="rating-popup">
   <div class="rp-header">
     <div class="rp-logo-ph" id="rp-logo-el"></div>
@@ -513,6 +576,7 @@ document.addEventListener('click',e=>{
 });
 renderLB();
 renderChips(PRESETS);
+loadState();
 
 // ── NAV ───────────────────────────────────────────────────────────────────
 function showPage(id){
@@ -521,6 +585,7 @@ function showPage(id){
   document.querySelectorAll('.tab-btn').forEach((b,i)=>b.classList.toggle('active',(i===0&&id==='build')||(i===1&&id==='leaderboard')));
   if(id==='leaderboard') renderLB();
 renderChips(PRESETS);
+loadState();
 }
 
 // ── SEARCH ────────────────────────────────────────────────────────────────
@@ -636,16 +701,22 @@ function renderCard(id,containerId){
   rx.onclick=e=>{e.stopPropagation();removeCard(id)};
   card.appendChild(rx);
 
+  const rateBtn=document.createElement('button');
+  rateBtn.className='rate-btn';
+  rateBtn.textContent='RATE';
+  rateBtn.onclick=e=>{e.stopPropagation();e.preventDefault();clearTimeout(ratingTimer);hideRatingPopup();showRatingPopup(id,card);};
+  card.appendChild(rateBtn);
+
   card.addEventListener('dragstart',()=>{draggedId=id;setTimeout(()=>card.classList.add('dragging'),0);clearTimeout(ratingTimer);hideRatingPopup();});
   card.addEventListener('dragend',()=>{card.classList.remove('dragging');draggedId=null});
   card.addEventListener('contextmenu',e=>{e.preventDefault();e.stopPropagation();ctxTarget=id;showCtx(e.clientX,e.clientY)});
   card.addEventListener('mouseenter', function() {
     clearTimeout(ratingTimer);
-    ratingTimer = setTimeout(function(){ showRatingPopup(id, card); }, 600);
+    if('ontouchstart' in window){ showRatingPopup(id, card); } else { ratingTimer = setTimeout(function(){ showRatingPopup(id, card); }, 600); }
   });
   card.addEventListener('mouseleave', function() {
     clearTimeout(ratingTimer);
-    ratingTimer = setTimeout(hideRatingPopup, 400);
+    if(!('ontouchstart' in window)){ ratingTimer = setTimeout(hideRatingPopup, 400); }
   });
 
   document.getElementById(containerId).appendChild(card);
@@ -792,7 +863,8 @@ function vote(id){
   localStorage.setItem('hell_lb',JSON.stringify(lb));
   localStorage.setItem('hell_votes',JSON.stringify(myVotes));
   renderLB();
-renderChips(PRESETS); toast('🔥 Vote cast');
+renderChips(PRESETS);
+loadState(); toast('🔥 Vote cast');
 }
 function renderLB(){
   const c=document.getElementById('lb-list');
@@ -897,13 +969,15 @@ function showRatingPopup(id, cardEl) {
   popup.style.left = left + 'px';
   popup.style.top = top + 'px';
   popup.style.display = 'block';
+  document.getElementById('rating-overlay').classList.add('open');
 
   popup.onmouseenter = () => clearTimeout(ratingTimer);
-  popup.onmouseleave = () => { ratingTimer = setTimeout(hideRatingPopup, 350); };
+  popup.onmouseleave = () => { if(!("ontouchstart" in window)) ratingTimer = setTimeout(hideRatingPopup, 350); };
 }
 
 function hideRatingPopup() {
   document.getElementById('rating-popup').style.display = 'none';
+  document.getElementById('rating-overlay').classList.remove('open');
   ratingTarget = null;
 }
 
@@ -1159,6 +1233,101 @@ function deleteLBEntry(id) {
   renderLB();
   toast('Removed from leaderboard');
 }
+
+
+// ── TOUCH DRAG & DROP ─────────────────────────────────────────────────────
+(function initTouch() {
+  let touchDragId = null;
+  let ghostEl = null;
+  let lastTarget = null;
+
+  document.addEventListener('touchstart', e => {
+    const card = e.target.closest('.casino-card');
+    if (!card) return;
+    touchDragId = card.id;
+    // Create ghost
+    ghostEl = card.cloneNode(true);
+    ghostEl.style.cssText = 'position:fixed;opacity:0.7;pointer-events:none;z-index:9999;width:'+card.offsetWidth+'px;transform:scale(1.05)';
+    document.body.appendChild(ghostEl);
+    card.style.opacity = '0.3';
+  }, {passive: true});
+
+  document.addEventListener('touchmove', e => {
+    if (!touchDragId || !ghostEl) return;
+    e.preventDefault();
+    const touch = e.touches[0];
+    ghostEl.style.left = (touch.clientX - ghostEl.offsetWidth/2) + 'px';
+    ghostEl.style.top = (touch.clientY - ghostEl.offsetHeight/2) + 'px';
+
+    // Find drop target
+    ghostEl.style.display = 'none';
+    const el = document.elementFromPoint(touch.clientX, touch.clientY);
+    ghostEl.style.display = '';
+
+    const dropZone = el && (el.closest('.tier-items') || el.closest('.pool-grid'));
+    if (dropZone !== lastTarget) {
+      if (lastTarget) lastTarget.classList.remove('drag-over');
+      if (dropZone) dropZone.classList.add('drag-over');
+      lastTarget = dropZone;
+    }
+  }, {passive: false});
+
+  document.addEventListener('touchend', e => {
+    if (!touchDragId) return;
+    const card = document.getElementById(touchDragId);
+    if (card) card.style.opacity = '';
+    if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+    if (lastTarget) {
+      lastTarget.classList.remove('drag-over');
+      if (card) lastTarget.appendChild(card);
+      lastTarget = null;
+    }
+    touchDragId = null;
+  });
+})();
+
+// ── LOCALSTORAGE SAVE/LOAD ────────────────────────────────────────────────
+function saveState() {
+  try {
+    // Save casino data and their positions
+    const state = { casinos, tiers: {} };
+    ['pool','tier-s','tier-a','tier-b','tier-c','tier-d','tier-f'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) state.tiers[id] = Array.from(el.children)
+        .filter(c => c.classList.contains('casino-card'))
+        .map(c => c.id);
+    });
+    localStorage.setItem('hell_state', JSON.stringify(state));
+  } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem('hell_state');
+    if (!raw) return;
+    const state = JSON.parse(raw);
+    if (!state.casinos) return;
+    casinos = state.casinos;
+    // Find max id
+    const ids = Object.keys(casinos).map(k => parseInt(k.replace('c',''))).filter(n=>!isNaN(n));
+    if (ids.length) nextId = Math.max(...ids) + 1;
+    // Render cards in their saved positions
+    Object.entries(state.tiers || {}).forEach(([containerId, cardIds]) => {
+      cardIds.forEach(cid => {
+        if (casinos[cid]) renderCard(cid, containerId);
+      });
+    });
+    // Refresh chips
+    renderChips(PRESETS);
+  } catch(e) {}
+}
+
+// Auto-save on any drop
+const origDropTo = dropTo;
+window.dropTo = function(e, cid) {
+  origDropTo(e, cid);
+  setTimeout(saveState, 100);
+};
 
 // ── UTILS ─────────────────────────────────────────────────────────────────
 function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500)}
